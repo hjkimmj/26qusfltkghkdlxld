@@ -328,6 +328,7 @@ function questionHTML(c){
 
 function render(){
   saveProgress();
+  
   const p=pool(), c=current();
   $("count").textContent=(caseIndex+1)+" / "+p.length+" 판례";
   $("fill").style.width=((caseIndex+1)/p.length*100)+"%";
