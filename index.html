@@ -253,6 +253,50 @@ let slideIndex=0;
 let examMode=false;
 let revealed=false;
 let filtered=null;
+  // 마지막 학습 위치 저장
+function saveProgress(){
+  localStorage.setItem("patentStudyProgress", JSON.stringify({
+    caseIndex: caseIndex,
+    slideIndex: slideIndex,
+    examMode: examMode,
+    revealed: revealed,
+    filtered: filtered
+  }));
+}
+
+// 마지막 학습 위치 불러오기
+function loadProgress(){
+  const saved = localStorage.getItem("patentStudyProgress");
+
+  if(!saved) return;
+
+  try{
+    const data = JSON.parse(saved);
+
+    if(typeof data.caseIndex === "number"){
+      caseIndex = data.caseIndex;
+    }
+
+    if(typeof data.slideIndex === "number"){
+      slideIndex = data.slideIndex;
+    }
+
+    if(typeof data.examMode === "boolean"){
+      examMode = data.examMode;
+    }
+
+    if(typeof data.revealed === "boolean"){
+      revealed = data.revealed;
+    }
+
+    if(Array.isArray(data.filtered)){
+      filtered = data.filtered;
+    }
+
+  }catch(e){
+    console.log("저장된 학습 위치를 불러오지 못했습니다.", e);
+  }
+}
 
 const $=id=>document.getElementById(id);
 const pool=()=>filtered || CASES.map((_,i)=>i);
@@ -283,6 +327,7 @@ function questionHTML(c){
 }
 
 function render(){
+  saveProgress();
   const p=pool(), c=current();
   $("count").textContent=(caseIndex+1)+" / "+p.length+" 판례";
   $("fill").style.width=((caseIndex+1)/p.length*100)+"%";
@@ -435,6 +480,16 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape")$("drawerBg").classList.remove("open");
 });
 
+loadProgress();
+
+if(examMode){
+  $("modeBtn").textContent="학습모드";
+  $("modeBtn").classList.add("exam");
+}else{
+  $("modeBtn").textContent="시험모드";
+  $("modeBtn").classList.remove("exam");
+}
+  
 render();
 </script>
 </body>
