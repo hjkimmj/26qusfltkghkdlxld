@@ -223,6 +223,15 @@ mark.hl{
   font-size:13.5px;line-height:1.5;z-index:80;max-width:90vw;text-align:center;
 }
 
+/* ===== 판례 추가 / 판결요지 닫기 ===== */
+.field select{
+  width:100%;font:inherit;font-size:14.5px;letter-spacing:-.02em;
+  padding:11px 12px;border:1px solid #dce3e9;border-radius:12px;background:#fff;color:#16181b;
+}
+.filter.add-case{color:#087df5;font-weight:700}
+.modal-actions .danger{color:#b04a4a;border-color:#efd0d0}
+.reveal button.is-open{background:#fff;color:#087df5;border:1px solid #087df5}
+
 @media(max-width:650px){
   .header,.main{width:calc(100% - 28px)}
   .header{padding:28px 0 20px;gap:8px}
@@ -326,6 +335,7 @@ mark.hl{
     <div id="editFields"></div>
     <div class="status" id="editStatus"></div>
     <div class="modal-actions">
+      <button id="editDelete" class="danger" style="display:none;margin-right:auto">이 판례 삭제</button>
       <button id="editCancel">취소</button>
       <button id="editSave" class="primary">저장</button>
     </div>
@@ -339,7 +349,7 @@ mark.hl{
     <div class="field"><div class="field-head"><span>GitHub 사용자명</span></div><input id="ghOwner" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
     <div class="field"><div class="field-head"><span>저장소 이름</span></div><input id="ghRepo" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
     <div class="field"><div class="field-head"><span>브랜치</span></div><input id="ghBranch" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="main"></div>
-    <div class="field"><div class="field-head"><span>수정 내용 저장 파일</span></div><input id="ghPath" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="edits.json"></div>
+    <div class="field"><div class="field-head"><span>수정·추가 내용 저장 파일</span></div><input id="ghPath" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="edits.json"></div>
     <div class="field"><div class="field-head"><span>토큰 (Personal Access Token)</span></div>
       <input id="ghToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_...">
       <div class="note">이 저장소 하나에만 <b>Contents: Read and write</b> 권한을 준 토큰을 사용하세요. 토큰은 절대 코드나 GitHub에 올리지 마세요.</div>
@@ -348,6 +358,26 @@ mark.hl{
     <div class="modal-actions">
       <button id="setCancel">닫기</button>
       <button id="setSave" class="primary">저장 및 연결 확인</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="addBg">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="판례 추가하기">
+    <h2>판례 추가하기</h2>
+    <div class="sub">추가한 판례는 다른 판례처럼 학습모드·시험모드·형광펜을 그대로 쓸 수 있습니다. 저장하면 GitHub에 반영되어 다른 기기에서도 보입니다.</div>
+    <div class="field"><div class="field-head"><span>진도 (어디에 넣을까요?)</span></div>
+      <select id="addSection"></select>
+      <input id="addNewSection" style="display:none;margin-top:8px" placeholder="새 진도 이름" autocomplete="off">
+    </div>
+    <div class="field"><div class="field-head"><span>판례 제목</span></div><input id="addTitle" autocomplete="off" placeholder="예: 포괄위임장 제출의 취급 (대리권의 증명)"></div>
+    <div class="field"><div class="field-head"><span>선고 정보 (선택)</span></div><input id="addInfo" autocomplete="off" placeholder="예: 대법원 2023. 7. 13. 선고 2021두63099 판결"></div>
+    <div class="field"><div class="field-head"><span>판시사항</span></div><textarea id="addQ" placeholder="[1] ...&#10;[2] ..."></textarea></div>
+    <div class="field"><div class="field-head"><span>판결요지</span></div><textarea id="addA"></textarea></div>
+    <div class="status" id="addStatus"></div>
+    <div class="modal-actions">
+      <button id="addCancel">취소</button>
+      <button id="addSave" class="primary">추가</button>
     </div>
   </div>
 </div>
@@ -361,6 +391,7 @@ let slideIndex=0;
 let examMode=false;
 let revealed=false;
 let filtered=null;
+let filterSection=null;   // 진도별 보기 중인 진도 이름 (전체 보기면 null)
   // 마지막 학습 위치 저장
 function saveProgress(){
   localStorage.setItem("patentStudyProgress", JSON.stringify({
@@ -444,7 +475,7 @@ function render(){
   $("fill").style.width=((caseIndex+1)/p.length*100)+"%";
   $("num").textContent=caseIndex+1;
   $("section").textContent=c.section || "";
-  $("title").textContent=titleOf(c.question);
+  $("title").textContent=caseTitle(c);
 
   if(examMode){
     $("app").classList.add("exam");
@@ -455,7 +486,9 @@ function render(){
       $("content").innerHTML += '<div class="answer-box"><span class="answer-label">[판결요지]</span><span data-hl="'+hlKey(a)+'">'+esc(a.text)+'</span></div>';
     }
 
-    $("reveal").style.display=revealed?"none":"flex";
+    $("reveal").style.display="flex";
+    $("revealBtn").textContent=revealed?"판결요지 닫기":"판결요지 확인";
+    $("revealBtn").classList.toggle("is-open",revealed);
     $("contentCount").textContent="판시사항 "+questionSlides(c).length+"개";
     $("prev").disabled=caseIndex===0;
     $("next").textContent=(caseIndex===p.length-1)?"완료  ›":"다음  ›";
@@ -515,7 +548,7 @@ function prev(){
 }
 
 function resetHome(){
-  caseIndex=0; slideIndex=0; revealed=false; filtered=null; render();
+  caseIndex=0; slideIndex=0; revealed=false; filtered=null; filterSection=null; render();
 }
 
 function buildFilters(){
@@ -529,11 +562,17 @@ function buildFilters(){
     b.innerHTML="<span>"+esc(name)+"</span><span>"+n+"</span>";
     b.onclick=()=>{
       filtered=CASES.map((c,i)=>c.section===name?i:null).filter(x=>x!==null);
+      filterSection=name;
       caseIndex=0;slideIndex=0;revealed=false;
       $("drawerBg").classList.remove("open");render();
     };
     $("filters").appendChild(b);
   });
+  const add=document.createElement("button");
+  add.className="filter add-case";
+  add.innerHTML="<span>＋ 판례 추가하기</span><span></span>";
+  add.onclick=()=>{$("drawerBg").classList.remove("open");openAdd();};
+  $("filters").appendChild(add);
 }
 
 /* ===================== 형광펜 기능 ===================== */
@@ -734,13 +773,16 @@ function hashStr(str){
 function initKeys(){
   const seen={};
   CASES.forEach(c=>{
-    const base="c"+hashStr(c.question||"");
-    seen[base]=(seen[base]||0)+1;
-    c._k=seen[base]>1?base+"-"+seen[base]:base;
-    (c.slides||[]).forEach((s,i)=>{s._k=c._k+"#"+i; s._orig=s.text; s.edited=false;});
+    if(c._added){c._k=c._id;}
+    else{
+      const base="c"+hashStr(c.question||"");
+      seen[base]=(seen[base]||0)+1;
+      c._k=seen[base]>1?base+"-"+seen[base]:base;
+    }
+    (c.slides||[]).forEach((s,i)=>{s._k=c._k+"#"+i; if(s._orig===undefined) s._orig=s.text; s.edited=false;});
   });
 }
-function slideText(s){return s.edited?esc(s.text):s.text;}
+function slideText(s){return (s.edited||s._esc)?esc(s.text):s.text;}
 function applyEdits(){
   CASES.forEach(c=>(c.slides||[]).forEach(s=>{
     const e=EDITS[s._k];
@@ -752,7 +794,7 @@ function loadEdits(){
   try{EDITS=JSON.parse(localStorage.getItem(ED_CACHE_KEY)||"{}")||{};}catch(e){EDITS={};}
   try{PENDING=JSON.parse(localStorage.getItem(ED_PENDING_KEY)||"{}")||{};}catch(e){PENDING={};}
   try{GH=Object.assign(GH,JSON.parse(localStorage.getItem(GH_KEY)||"{}")||{});}catch(e){}
-  applyEdits();
+  rebuildCases(false);
 }
 function saveEditsLocal(){
   try{
@@ -832,10 +874,11 @@ async function ghPut(c,edits,sha,msg){
   if(r.status===409||r.status===422) return {ok:false,conflict:true};
   throw new Error(ghErr(r.status,"GitHub 저장"));
 }
-function mergePending(base){
+function mergePending(base,pend){
+  pend=pend||PENDING;
   const m=Object.assign({},base);
-  Object.keys(PENDING).forEach(k=>{
-    if(PENDING[k]===null) delete m[k]; else m[k]=PENDING[k];
+  Object.keys(pend).forEach(k=>{
+    if(pend[k]===null) delete m[k]; else m[k]=pend[k];
   });
   return m;
 }
@@ -847,13 +890,17 @@ async function syncPush(){
   if(syncing) return {ok:false,reason:"busy"};
   syncing=true;
   try{
+    const snap=Object.assign({},PENDING);   // 저장하는 동안 새로 생긴 수정은 건드리지 않음
     for(let i=0;i<3;i++){
       const cur=await ghGet(c);
-      const merged=mergePending(cur.edits);
-      const n=Object.keys(PENDING).length;
-      const r=await ghPut(c,merged,cur.sha,"판례 내용 수정 ("+n+"건)");
+      const merged=mergePending(cur.edits,snap);
+      const n=Object.keys(snap).length;
+      const r=await ghPut(c,merged,cur.sha,"판례 추가·수정 ("+n+"건)");
       if(r.ok){
-        EDITS=merged;PENDING={};saveEditsLocal();applyEdits();render();
+        Object.keys(snap).forEach(k=>{if(PENDING[k]===snap[k]) delete PENDING[k];});
+        EDITS=mergePending(merged,PENDING);
+        saveEditsLocal();rebuildCases(true);render();
+        if(Object.keys(PENDING).length) setTimeout(()=>{syncPush();},300);
         return {ok:true};
       }
     }
@@ -871,7 +918,7 @@ async function syncFromRemote(){
     const cur=await ghGet(c);
     const merged=mergePending(cur.edits);
     if(JSON.stringify(merged)!==JSON.stringify(EDITS)){
-      EDITS=merged;saveEditsLocal();applyEdits();render();
+      EDITS=merged;saveEditsLocal();rebuildCases(true);render();
     }
     if(Object.keys(PENDING).length&&c.token){
       const r=await syncPush();
@@ -894,6 +941,14 @@ function openEdit(){
   editUnits=units;editCase=c;
   const box=$("editFields");
   box.innerHTML="";
+  if(c._added){
+    const g=document.createElement("div");g.className="field";
+    g.innerHTML='<div class="field-head"><span>판례 제목</span></div><input id="editTitle" autocomplete="off">'+
+      '<div class="field-head" style="margin-top:12px"><span>진도</span></div><input id="editSection" autocomplete="off">';
+    box.appendChild(g);
+    $("editTitle").value=c._title||"";$("editSection").value=c.section||"";
+  }
+  $("editDelete").style.display=c._added?"":"none";
   units.forEach(s=>{
     const wrap=document.createElement("div");wrap.className="field";
     const head=document.createElement("div");head.className="field-head";
@@ -916,42 +971,58 @@ function openEdit(){
   const first=box.querySelector("textarea"); if(first){first.focus();first.setSelectionRange(0,0);first.scrollTop=0;}
 }
 function editDirty(){
-  return [...$("editFields").querySelectorAll("textarea")].some((t,i)=>
+  const meta=!!(editCase&&editCase._added&&$("editTitle")&&
+    ($("editTitle").value.trim()!==editCase._title||$("editSection").value.trim()!==editCase.section));
+  return meta||[...$("editFields").querySelectorAll("textarea")].some((t,i)=>
     t.value.replace(/\r\n?/g,"\n")!==editUnits[i].text);
 }
 function closeEdit(){$("editBg").classList.remove("open");}
 
 async function saveEdit(){
   const st=$("editStatus");
+  const err=m=>{st.textContent=m;st.className="status err";};
   const tas=[...$("editFields").querySelectorAll("textarea")];
+  const isAdded=!!editCase._added;
   for(const t of tas){
-    if(!t.value.trim()){
-      st.textContent="내용을 비울 수 없습니다. 원문으로 돌리려면 '원문으로 되돌리기'를 누르세요.";
-      st.className="status err";return;
+    if(!t.value.trim()) return err("내용을 비울 수 없습니다."+(isAdded?"":" 원문으로 돌리려면 '원문으로 되돌리기'를 누르세요."));
+  }
+  const en=isAdded?EDITS[editCase._id]:null;
+  if(isAdded&&!en){closeEdit();return;}   // 다른 기기에서 이미 삭제된 판례
+  let changed=0,metaChanged=false,newSection=null;
+  if(isAdded&&$("editTitle")){
+    const nt=$("editTitle").value.trim(), ns=$("editSection").value.trim();
+    if(!nt||!ns) return err("판례 제목과 진도 이름을 비울 수 없습니다.");
+    if(nt!==en.title||ns!==en.section){
+      en.title=nt;en.question=nt;en.section=ns;PENDING[editCase._id]=en;
+      metaChanged=true;newSection=ns;
     }
   }
-  let changed=0;
   tas.forEach((t,i)=>{
     const s=editUnits[i], v=t.value.replace(/\r\n?/g,"\n");
     if(v===s.text) return;
     changed++;
-    if(v===s._orig){
+    if(isAdded){
+      const si=editCase.slides.indexOf(s);
+      if(si>=0&&en.slides&&en.slides[si]) en.slides[si].text=v;
+      PENDING[editCase._id]=en;
+    }else if(v===s._orig){
       delete EDITS[s._k];PENDING[s._k]=null;
     }else{
-      const e={text:v,ref:titleOf(editCase.question)+" · "+s.label,at:new Date().toISOString()};
+      const e={text:v,ref:caseTitle(editCase)+" · "+s.label,at:new Date().toISOString()};
       EDITS[s._k]=e;PENDING[s._k]=e;
     }
   });
-  if(!changed){closeEdit();return;}
-  applyEdits();saveEditsLocal();render();
+  if(!changed&&!metaChanged){closeEdit();return;}
+  if(isAdded){
+    if(metaChanged&&filterSection) filterSection=newSection;   // 진도를 옮겨도 그 판례를 계속 보이게
+    rebuildCases(true);
+  }else applyEdits();
+  saveEditsLocal();render();
   $("editSave").disabled=true;$("editCancel").disabled=true;
   st.textContent="GitHub에 저장하는 중…";st.className="status";
   const r=await syncPush();
   closeEdit();
-  if(r.ok) toast("저장되었습니다. 다른 기기에서는 새로고침하면 반영됩니다.",4500);
-  else if(r.reason==="no-config") toast("이 기기에만 저장되었습니다. ⚙ 저장 설정에서 GitHub를 연결하면 모든 기기에 적용됩니다.",6500);
-  else if(r.reason==="busy") toast("저장 중인 작업이 있어 잠시 후 자동으로 저장됩니다.",5000);
-  else toast((r.error&&r.error.message||"GitHub 저장에 실패했습니다.")+" 이 기기에는 저장되었고, 다음 접속 때 다시 시도합니다.",7500);
+  syncToast(r,"저장되었습니다. 다른 기기에서는 새로고침하면 반영됩니다.");
 }
 
 /* ---- 저장 설정 창 ---- */
@@ -1005,6 +1076,148 @@ document.addEventListener("visibilitychange",()=>{
 });
 /* ===================== /내용 수정 ===================== */
 
+/* ===================== 판례 추가 / 삭제 ===================== */
+// 추가한 판례는 수정본과 같은 파일(edits.json)에 "+"로 시작하는 키로 저장됩니다.
+// (index.html의 원본 판례 데이터는 건드리지 않고, 화면에서 합쳐서 보여줍니다.)
+const BASE_CASES=CASES.slice();
+
+function caseTitle(c){return c._title||titleOf(c.question);}
+
+function syncToast(r,okMsg){
+  if(r.ok) toast(okMsg,4500);
+  else if(r.reason==="no-config") toast("이 기기에만 저장되었습니다. ⚙ 저장 설정에서 GitHub를 연결하면 모든 기기에 적용됩니다.",6500);
+  else if(r.reason==="busy") toast("저장 중인 작업이 있어 잠시 후 자동으로 저장됩니다.",5000);
+  else toast(((r.error&&r.error.message)||"GitHub 저장에 실패했습니다.")+" 이 기기에는 저장되었고, 다음 접속 때 다시 시도합니다.",7500);
+}
+function recomputeFilter(){
+  if(filterSection){
+    const idx=[];
+    CASES.forEach((c,i)=>{if(c.section===filterSection) idx.push(i);});
+    if(idx.length){filtered=idx;return;}
+  }
+  filterSection=null;filtered=null;
+}
+function restoreFilterFromProgress(){
+  const c0=(filtered&&filtered.length)?CASES[filtered[0]]:null;
+  filterSection=c0?c0.section:null;
+  recomputeFilter();
+  if(caseIndex<0||caseIndex>=pool().length) caseIndex=0;
+}
+function addedKeys(){
+  return Object.keys(EDITS).filter(k=>{
+    const e=EDITS[k];
+    return k.charAt(0)==="+"&&e&&e.kind==="case"&&Array.isArray(e.slides)&&e.slides.length>=2&&
+      e.slides[0]&&e.slides[1]&&String(e.slides[0].text||"").trim()&&
+      String(e.slides[1].text||"").trim()&&String(e.title||"").trim()&&String(e.section||"").trim();
+  }).sort((a,b)=>{
+    const x=EDITS[a].at||"",y=EDITS[b].at||"";
+    return x<y?-1:x>y?1:(a<b?-1:1);
+  });
+}
+// 원본 판례 + 추가한 판례를 합쳐 CASES를 다시 만듦 (추가한 판례는 같은 진도의 맨 뒤에 들어감)
+function rebuildCases(remap){
+  const keep=(remap&&CASES.length&&pool().length)?current():null;
+  const keepKey=keep?keep._k:null;
+  const merged=BASE_CASES.slice();
+  addedKeys().forEach(k=>{
+    const e=EDITS[k];
+    const c={
+      section:String(e.section).trim(),question:String(e.title).trim(),answer:"",
+      slides:e.slides.slice(0,2).map((s,i)=>({label:i===0?"판시사항":"판결요지",text:String(s.text),_esc:true})),
+      _added:true,_id:k,_title:String(e.title).trim()
+    };
+    let at=-1;
+    for(let i=merged.length-1;i>=0;i--){if(merged[i].section===c.section){at=i;break;}}
+    if(at<0) merged.push(c); else merged.splice(at+1,0,c);
+  });
+  CASES.length=0;
+  merged.forEach(c=>CASES.push(c));
+  initKeys();
+  applyEdits();
+  if(remap){
+    recomputeFilter();
+    const p=pool();
+    const idx=keepKey?p.findIndex(i=>CASES[i]._k===keepKey):-1;
+    if(idx>=0) caseIndex=idx;
+    else{
+      if(caseIndex>=p.length) caseIndex=Math.max(0,p.length-1);
+      slideIndex=0;
+    }
+  }
+}
+
+function openAdd(){
+  const secs=[];
+  CASES.forEach(c=>{if(c.section&&secs.indexOf(c.section)<0) secs.push(c.section);});
+  const sel=$("addSection");
+  sel.innerHTML="";
+  secs.forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n;sel.appendChild(o);});
+  const o=document.createElement("option");o.value="__new__";o.textContent="＋ 새 진도 만들기";sel.appendChild(o);
+  const cur=current();
+  if(cur&&secs.indexOf(cur.section)>=0) sel.value=cur.section;
+  $("addNewSection").style.display="none";
+  ["addNewSection","addTitle","addInfo","addQ","addA"].forEach(id=>{$(id).value="";});
+  $("addStatus").textContent="";$("addStatus").className="status";
+  $("addSave").disabled=false;$("addCancel").disabled=false;
+  $("addBg").classList.add("open");
+  $("addTitle").focus();
+}
+function closeAdd(){$("addBg").classList.remove("open");}
+async function saveAdd(){
+  const st=$("addStatus");
+  const err=m=>{st.textContent=m;st.className="status err";};
+  const section=$("addSection").value==="__new__"?$("addNewSection").value.trim():$("addSection").value;
+  const title=$("addTitle").value.trim(), info=$("addInfo").value.trim();
+  const q=$("addQ").value.replace(/\r\n?/g,"\n").trim();
+  const a=$("addA").value.replace(/\r\n?/g,"\n").trim();
+  if(!section) return err("새 진도 이름을 입력해 주세요.");
+  if(!title) return err("판례 제목을 입력해 주세요.");
+  if(!q) return err("판시사항을 입력해 주세요.");
+  if(!a) return err("판결요지를 입력해 주세요.");
+  const id="+n"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  const entry={
+    kind:"case",section:section,title:title,question:title,
+    slides:[{label:"판시사항",text:(info?info+"\n\n":"")+q},{label:"판결요지",text:a}],
+    at:new Date().toISOString()
+  };
+  EDITS[id]=entry;PENDING[id]=entry;
+  saveEditsLocal();
+  if(filterSection&&filterSection!==section) filterSection=section;   // 다른 진도를 보던 중이면 새 판례의 진도로 이동
+  rebuildCases(true);
+  const p=pool(), ni=p.findIndex(i=>CASES[i]._k===id);
+  caseIndex=ni<0?0:ni;slideIndex=0;revealed=false;
+  render();
+  window.scrollTo({top:0,behavior:"smooth"});
+  $("addSave").disabled=true;$("addCancel").disabled=true;
+  st.textContent="GitHub에 저장하는 중…";st.className="status";
+  const r=await syncPush();
+  closeAdd();
+  syncToast(r,"판례를 추가했습니다. 다른 기기에서는 새로고침하면 반영됩니다.");
+}
+async function deleteAdded(){
+  if(!editCase||!editCase._added) return;
+  if(!confirm("이 판례를 삭제할까요? 삭제한 판례는 되돌릴 수 없습니다.")) return;
+  const id=editCase._id;
+  delete EDITS[id];PENDING[id]=null;
+  saveEditsLocal();closeEdit();
+  rebuildCases(true);render();
+  const r=await syncPush();
+  syncToast(r,"삭제했습니다. 다른 기기에서는 새로고침하면 반영됩니다.");
+}
+$("addSection").onchange=()=>{
+  const isNew=$("addSection").value==="__new__";
+  $("addNewSection").style.display=isNew?"block":"none";
+  if(isNew) $("addNewSection").focus();
+};
+$("addSave").onclick=saveAdd;
+$("addCancel").onclick=()=>{
+  const dirty=["addNewSection","addTitle","addInfo","addQ","addA"].some(id=>$(id).value.trim());
+  if(dirty&&!confirm("입력한 내용을 저장하지 않고 닫을까요?")) return;
+  closeAdd();
+};
+$("editDelete").onclick=deleteAdded;
+/* ===================== /판례 추가 / 삭제 ===================== */
+
 $("next").onclick=next;
 $("prev").onclick=prev;
 $("homeBtn").onclick=resetHome;
@@ -1014,10 +1227,10 @@ $("modeBtn").onclick=()=>{
   $("modeBtn").classList.toggle("exam",examMode);
   render();
 };
-$("revealBtn").onclick=()=>{revealed=true;render();};
+$("revealBtn").onclick=()=>{revealed=!revealed;render();};
 $("sectionBtn").onclick=()=>{$("drawerBg").classList.add("open");buildFilters();};
 $("close").onclick=()=>$("drawerBg").classList.remove("open");
-$("allFilter").onclick=()=>{filtered=null;caseIndex=0;slideIndex=0;revealed=false;$("drawerBg").classList.remove("open");render();};
+$("allFilter").onclick=()=>{filtered=null;filterSection=null;caseIndex=0;slideIndex=0;revealed=false;$("drawerBg").classList.remove("open");render();};
 $("drawerBg").onclick=e=>{if(e.target===$("drawerBg"))$("drawerBg").classList.remove("open");};
 
 document.addEventListener("keydown",e=>{
@@ -1031,6 +1244,7 @@ loadProgress();
 loadHL();
 initKeys();
 loadEdits();
+restoreFilterFromProgress();
 
 if(examMode){
   $("modeBtn").textContent="학습모드";
