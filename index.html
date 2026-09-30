@@ -148,6 +148,34 @@ button{font:inherit}
   background:#fff;text-align:left;cursor:pointer;font-size:15px;
 }
 .filter:hover{background:#fafbfd}
+/* ===== 진도별 검색 / 순서 변경 ===== */
+.section-row{display:flex;align-items:center;gap:6px;border-bottom:1px solid #e7ebef}
+.section-toggle{flex:1;width:100%;padding:16px 4px;display:flex;justify-content:space-between;align-items:center;border:0;background:#fff;text-align:left;cursor:pointer;font-size:15px}
+.section-toggle:hover{background:#fafbfd}
+.section-toggle .chev{font-size:14px;color:#8a98a5;transition:.15s}
+.section-row.open .section-toggle .chev{transform:rotate(90deg)}
+.order-btn{width:30px;height:30px;border:1px solid #dce3e9;border-radius:8px;background:#fff;color:#5d6e7d;cursor:pointer;line-height:1}
+.order-btn:hover{background:#f7f9fb}
+.section-cases{display:none;padding:4px 0 8px 8px;background:#fbfcfd}
+.section-row.open + .section-cases{display:block}
+.case-item{display:flex;align-items:center;gap:6px;padding:7px 4px}
+.case-pick{flex:1;min-width:0;border:0;background:transparent;text-align:left;cursor:pointer;padding:7px 5px;border-radius:8px;font-size:13px;color:#394754;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.case-pick:hover{background:#eef5fb;color:#0875df}
+.case-order{display:flex;gap:3px}
+.case-order button{width:28px;height:28px;padding:0;border:1px solid #e0e5ea;border-radius:7px;background:#fff;color:#71808d;cursor:pointer}
+.case-order button:hover{background:#f2f6f9}
+.drawer-search{margin:8px 0 10px;position:relative}
+.drawer-search input{width:100%;padding:12px 38px 12px 13px;border:1px solid #dce3e9;border-radius:12px;font:inherit;font-size:14px;background:#fff}
+.drawer-search .search-clear{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:28px;height:28px;border:0;border-radius:50%;background:#f1f4f7;color:#697887;cursor:pointer}
+.search-results{display:none;margin:0 0 10px;border:1px solid #e4e9ee;border-radius:12px;overflow:hidden;background:#fff}
+.search-results.show{display:block}
+.search-result{display:block;width:100%;padding:11px 12px;border:0;border-bottom:1px solid #edf0f3;background:#fff;text-align:left;cursor:pointer}
+.search-result:last-child{border-bottom:0}
+.search-result:hover{background:#f7fafc}
+.search-result small{display:block;color:#7b8a97;margin-bottom:3px}
+.search-result strong{display:block;color:#26313b;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.order-help{font-size:11.5px;color:#8a98a5;margin:4px 4px 8px}
+
 .filter strong{color:#087df5}
 
 /* ===== 형광펜 ===== */
@@ -322,8 +350,14 @@ mark.hl{
       <h2>진도별 학습</h2>
       <button class="close" id="close">×</button>
     </div>
-    <div class="help">파트를 선택하면 해당 판례부터 학습합니다.</div>
+    <div class="help">판례 제목을 검색하거나 진도를 펼쳐 판례 순서를 바꿀 수 있습니다.</div>
+    <div class="drawer-search">
+      <input id="caseSearch" type="search" placeholder="판례 상단제목 검색" autocomplete="off">
+      <button class="search-clear" id="caseSearchClear" aria-label="검색어 지우기">×</button>
+    </div>
+    <div class="search-results" id="searchResults"></div>
     <button class="filter" id="allFilter"><strong>전체</strong><span id="allCount"></span></button>
+    <div class="order-help">진도를 펼친 뒤 판례 칸을 드래그해서 순서를 변경할 수 있습니다. 순서를 바꿔도 목록은 열린 상태로 유지됩니다. 진도 자체도 드래그할 수 있습니다.</div>
     <div id="filters"></div>
   </aside>
 </div>
@@ -349,7 +383,7 @@ mark.hl{
     <div class="field"><div class="field-head"><span>GitHub 사용자명</span></div><input id="ghOwner" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
     <div class="field"><div class="field-head"><span>저장소 이름</span></div><input id="ghRepo" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
     <div class="field"><div class="field-head"><span>브랜치</span></div><input id="ghBranch" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="main"></div>
-    <div class="field"><div class="field-head"><span>수정·추가 내용 저장 파일</span></div><input id="ghPath" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="edits.json"></div>
+    <div class="field"><div class="field-head"><span>수정·추가 내용 저장 파일</span></div><input id="ghPath" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="patent-edits.json"></div>
     <div class="field"><div class="field-head"><span>토큰 (Personal Access Token)</span></div>
       <input id="ghToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_...">
       <div class="note">이 저장소 하나에만 <b>Contents: Read and write</b> 권한을 준 토큰을 사용하세요. 토큰은 절대 코드나 GitHub에 올리지 마세요.</div>
@@ -509,11 +543,31 @@ function render(){
   applyHighlights();
 }
 
+function sectionNames(){
+  const names=[];
+  CASES.forEach(c=>{if(c.section&&names.indexOf(c.section)<0)names.push(c.section);});
+  return names;
+}
+function jumpToNextSection(){
+  const names=sectionNames();
+  const currentSection=(current()||{}).section;
+  const at=names.indexOf(currentSection);
+  if(at<0||at>=names.length-1) return false;
+  const nextName=names[at+1];
+  filtered=null; filterSection=null;
+  const idx=CASES.findIndex(c=>c.section===nextName);
+  if(idx<0) return false;
+  caseIndex=idx; slideIndex=0; revealed=false;
+  return true;
+}
+
 function next(){
   const p=pool(), c=current();
   if(examMode){
     if(caseIndex<p.length-1){
       caseIndex++; revealed=false; render();
+    }else if(filtered && jumpToNextSection()){
+      render();
     }else{
       alert("마지막 판례까지 학습했습니다.");
       caseIndex=0; revealed=false; render();
@@ -523,6 +577,8 @@ function next(){
       slideIndex++;
     }else if(caseIndex<p.length-1){
       caseIndex++; slideIndex=0;
+    }else if(filtered && jumpToNextSection()){
+      slideIndex=0;
     }else{
       alert("마지막 판례까지 학습했습니다.");
       caseIndex=0; slideIndex=0;
@@ -551,32 +607,286 @@ function resetHome(){
   caseIndex=0; slideIndex=0; revealed=false; filtered=null; filterSection=null; render();
 }
 
+function getOrderMeta(){
+  const m=EDITS && EDITS[META_KEY];
+  return (m&&m.kind==="meta")?m:{order:[],sectionOrder:[]};
+}
+function caseOrderId(c){
+  if(c._added) return c._id;
+  return "o"+hashStr(c.question||"");
+}
+function applyCaseOrder(){
+  const meta=getOrderMeta();
+  const order=Array.isArray(meta.order)?meta.order:[];
+  const sectionOrder=Array.isArray(meta.sectionOrder)?meta.sectionOrder:[];
+  if(!order.length && !sectionOrder.length) return;
+
+  const rank=new Map(order.map((id,i)=>[id,i]));
+  const grouped=new Map();
+  CASES.forEach(c=>{
+    if(!grouped.has(c.section)) grouped.set(c.section,[]);
+    grouped.get(c.section).push(c);
+  });
+  grouped.forEach(arr=>arr.sort((a,b)=>{
+    const ra=rank.has(caseOrderId(a))?rank.get(caseOrderId(a)):1000000;
+    const rb=rank.has(caseOrderId(b))?rank.get(caseOrderId(b)):1000000;
+    return ra-rb;
+  }));
+  const sr=new Map(sectionOrder.map((n,i)=>[n,i]));
+  const groups=[...grouped.entries()];
+  groups.sort((a,b)=>{
+    const ra=sr.has(a[0])?sr.get(a[0]):1000000;
+    const rb=sr.has(b[0])?sr.get(b[0]):1000000;
+    return ra-rb;
+  });
+  const merged=groups.flatMap(x=>x[1]);
+  CASES.length=0; merged.forEach(c=>CASES.push(c));
+  initKeys(); applyEdits();
+}
+function persistCaseOrder(){
+  const meta=getOrderMeta();
+  meta.kind="meta"; meta.app=APP_ID;
+  meta.order=CASES.map(caseOrderId);
+  meta.sectionOrder=sectionNames();
+  EDITS[META_KEY]=meta;
+  PENDING[META_KEY]=meta;
+  saveEditsLocal();
+}
+function reorderCasesBySection(sectionName, draggedId, targetId){
+  if(draggedId===targetId) return false;
+  const ids=CASES.map((c,i)=>({c,i})).filter(x=>x.c.section===sectionName);
+  const from=ids.findIndex(x=>caseOrderId(x.c)===draggedId);
+  const to=ids.findIndex(x=>caseOrderId(x.c)===targetId);
+  if(from<0||to<0)return false;
+  const moved=CASES.splice(ids[from].i,1)[0];
+  const refreshed=CASES.map((c,i)=>({c,i})).filter(x=>x.c.section===sectionName);
+  const insertAt=refreshed.findIndex(x=>caseOrderId(x.c)===targetId);
+  CASES.splice(refreshed[insertAt].i+(from<to?1:0),0,moved);
+  persistCaseOrder();
+  rebuildCases(true);
+  render();
+  buildFilters();
+  return true;
+}
+function reorderSections(draggedName,targetName){
+  if(draggedName===targetName)return false;
+  const names=sectionNames();
+  const from=names.indexOf(draggedName), to=names.indexOf(targetName);
+  if(from<0||to<0)return false;
+  names.splice(from,1);
+  names.splice(names.indexOf(targetName)+(from<to?1:0),0,draggedName);
+  const groups=new Map();
+  CASES.forEach(c=>{if(!groups.has(c.section))groups.set(c.section,[]);groups.get(c.section).push(c);});
+  const merged=names.flatMap(n=>groups.get(n)||[]);
+  CASES.length=0;merged.forEach(c=>CASES.push(c));
+  persistCaseOrder();
+  rebuildCases(true);
+  render();
+  buildFilters();
+  return true;
+}
+
+function buildSearchResults(q){
+  const box=$("searchResults");
+  const term=q.trim().toLowerCase();
+  box.innerHTML="";
+  if(!term){box.classList.remove("show");return;}
+  const found=CASES.map((c,i)=>({c,i,title:caseTitle(c)}))
+    .filter(x=>(x.title+" "+x.c.question).toLowerCase().includes(term))
+    .slice(0,40);
+  if(!found.length){
+    box.innerHTML='<div style="padding:13px;color:#7b8a97;font-size:13px">검색 결과가 없습니다.</div>';
+  }else{
+    found.forEach(x=>{
+      const b=document.createElement("button");
+      b.className="search-result";
+      b.innerHTML="<small>"+esc(x.c.section)+"</small><strong>"+esc(x.title)+"</strong>";
+      b.onclick=()=>{
+        filtered=null;filterSection=null;
+        caseIndex=x.i;slideIndex=0;revealed=false;
+        $("drawerBg").classList.remove("open");render();
+      };
+      box.appendChild(b);
+    });
+  }
+  box.classList.add("show");
+}
+function rememberOpenSections(){
+  return [...document.querySelectorAll(".section-row.open")]
+    .map(el=>el.dataset.section)
+    .filter(Boolean);
+}
+function restoreOpenSections(names){
+  const wanted=new Set(names||[]);
+  document.querySelectorAll(".section-row").forEach(row=>{
+    if(wanted.has(row.dataset.section)){
+      row.classList.add("open");
+    }
+  });
+}
 function buildFilters(){
+  const openSections=rememberOpenSections();
   const counts={};
   CASES.forEach(c=>counts[c.section]=(counts[c.section]||0)+1);
   $("allCount").textContent=CASES.length;
   $("filters").innerHTML="";
+  let draggedSection=null;
+
   Object.entries(counts).forEach(([name,n])=>{
-    const b=document.createElement("button");
-    b.className="filter";
-    b.innerHTML="<span>"+esc(name)+"</span><span>"+n+"</span>";
-    b.onclick=()=>{
-      filtered=CASES.map((c,i)=>c.section===name?i:null).filter(x=>x!==null);
-      filterSection=name;
-      caseIndex=0;slideIndex=0;revealed=false;
-      $("drawerBg").classList.remove("open");render();
-    };
-    $("filters").appendChild(b);
+    const row=document.createElement("div"); row.className="section-row";
+    row.draggable=true;
+    row.dataset.section=name;
+
+    const handle=document.createElement("span");
+    handle.className="section-drag-handle";
+    handle.textContent="⠿";
+    handle.title="드래그해서 진도 순서 변경";
+
+    const b=document.createElement("button"); b.className="section-toggle";
+    b.innerHTML="<span>"+esc(name)+" <strong style='color:#087df5'>"+n+"</strong></span><span class='chev'>›</span>";
+    b.onclick=()=>row.classList.toggle("open");
+
+    row.append(handle,b);
+
+    row.addEventListener("dragstart",e=>{
+      draggedSection=name;
+      e.dataTransfer.effectAllowed="move";
+      e.dataTransfer.setData("text/plain",name);
+      row.classList.add("dragging");
+    });
+    row.addEventListener("dragend",()=>{
+      draggedSection=null;
+      row.classList.remove("dragging");
+      document.querySelectorAll(".section-row.drag-over").forEach(x=>x.classList.remove("drag-over"));
+    });
+    row.addEventListener("dragover",e=>{
+      if(!draggedSection || draggedSection===name)return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect="move";
+      row.classList.add("drag-over");
+    });
+    row.addEventListener("dragleave",()=>row.classList.remove("drag-over"));
+    row.addEventListener("drop",e=>{
+      e.preventDefault();
+      row.classList.remove("drag-over");
+      if(draggedSection && draggedSection!==name) reorderSections(draggedSection,name);
+    });
+
+    $("filters").appendChild(row);
+
+    const list=document.createElement("div"); list.className="section-cases";
+    let draggedCaseId=null;
+
+    CASES.filter(c=>c.section===name).forEach(c=>{
+      const item=document.createElement("div");
+      item.className="case-item";
+      item.draggable=true;
+      item.dataset.caseId=caseOrderId(c);
+
+      const handle=document.createElement("span");
+      handle.className="drag-handle";
+      handle.textContent="⠿";
+      handle.title="드래그해서 판례 순서 변경";
+
+      const pick=document.createElement("button");
+      pick.className="case-pick";
+      pick.textContent=caseTitle(c);
+      pick.title=caseTitle(c);
+      pick.onclick=()=>{
+        filtered=null;filterSection=null;
+        caseIndex=CASES.indexOf(c);slideIndex=0;revealed=false;
+        $("drawerBg").classList.remove("open");render();
+      };
+
+      item.append(handle,pick);
+
+      item.addEventListener("dragstart",e=>{
+        draggedCaseId=caseOrderId(c);
+        e.dataTransfer.effectAllowed="move";
+        e.dataTransfer.setData("text/plain",draggedCaseId);
+        item.classList.add("dragging");
+      });
+      item.addEventListener("dragend",()=>{
+        draggedCaseId=null;
+        item.classList.remove("dragging");
+        list.querySelectorAll(".case-item.drag-over").forEach(x=>x.classList.remove("drag-over"));
+      });
+      item.addEventListener("dragover",e=>{
+        if(!draggedCaseId || draggedCaseId===caseOrderId(c))return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect="move";
+        item.classList.add("drag-over");
+      });
+      item.addEventListener("dragleave",()=>item.classList.remove("drag-over"));
+      item.addEventListener("drop",e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        item.classList.remove("drag-over");
+        if(draggedCaseId && draggedCaseId!==caseOrderId(c)){
+          reorderCasesBySection(name,draggedCaseId,caseOrderId(c));
+        }
+      });
+
+      list.appendChild(item);
+    });
+    $("filters").appendChild(list);
   });
+
   const add=document.createElement("button");
   add.className="filter add-case";
   add.innerHTML="<span>＋ 판례 추가하기</span><span></span>";
   add.onclick=()=>{$("drawerBg").classList.remove("open");openAdd();};
   $("filters").appendChild(add);
+  restoreOpenSections(openSections);
 }
 
+/* ===== 모바일 터치 드래그 ===== */
+(function enableTouchReorder(){
+  let touchItem=null, touchSection=null, startY=0, active=false;
+  document.addEventListener("touchstart",e=>{
+    const t=e.target.closest(".case-item,.section-row");
+    if(!t)return;
+    if(e.target.closest(".case-pick,.section-toggle"))return;
+    touchItem=t; startY=e.touches[0].clientY; active=false;
+  },{passive:true});
+  document.addEventListener("touchmove",e=>{
+    if(!touchItem)return;
+    const dy=e.touches[0].clientY-startY;
+    if(Math.abs(dy)<8)return;
+    active=true;
+    e.preventDefault();
+    const els=[...document.elementsFromPoint(e.touches[0].clientX,e.touches[0].clientY)];
+    const target=els.find(x=>x.classList&&x.classList.contains(touchItem.classList.contains("case-item")?"case-item":"section-row"));
+    document.querySelectorAll(".drag-over").forEach(x=>x.classList.remove("drag-over"));
+    if(target && target!==touchItem)target.classList.add("drag-over");
+  },{passive:false});
+  document.addEventListener("touchend",e=>{
+    if(!touchItem||!active){touchItem=null;return;}
+    const touch=e.changedTouches[0];
+    const els=[...document.elementsFromPoint(touch.clientX,touch.clientY)];
+    if(touchItem.classList.contains("case-item")){
+      const target=els.find(x=>x.classList&&x.classList.contains("case-item"));
+      if(target && target!==touchItem){
+        const section=touchItem.closest(".section-cases");
+        const secRow=section?.previousElementSibling;
+        const name=secRow?.dataset.section;
+        if(name)reorderCasesBySection(name,touchItem.dataset.caseId,target.dataset.caseId);
+      }
+    }else{
+      const target=els.find(x=>x.classList&&x.classList.contains("section-row"));
+      if(target && target!==touchItem){
+        reorderSections(touchItem.dataset.section,target.dataset.section);
+      }
+    }
+    document.querySelectorAll(".drag-over").forEach(x=>x.classList.remove("drag-over"));
+    touchItem=null;active=false;
+  },{passive:true});
+})();
+
 /* ===================== 형광펜 기능 ===================== */
-const HL_STORAGE_KEY="patentStudyHighlights";
+const APP_ID="patent";
+const HL_STORAGE_KEY=APP_ID+"StudyHighlights";
 let HL={};            // { 슬라이드키: [[시작,끝],...] }  (글자 위치, 줄바꿈 제외)
 let hlMode=null;      // null | "mark" | "erase"
 let hlSuppressClickUntil=0;
@@ -584,11 +894,12 @@ let hlMouseDown=false;
 let hlTimer=null;
 
 function hlKey(s){
-  // 슬라이드 내용으로 키 생성 → 판례 순서가 바뀌어도 형광펜이 유지됨
+  // 판례 내용이 수정되어도 같은 슬라이드의 형광펜을 유지합니다.
+  if(s && s._k) return "hl:"+s._k;
   const str=(s.label||"")+"|"+s.text;
   let h=5381;
   for(let i=0;i<str.length;i++){h=((h<<5)+h+str.charCodeAt(i))|0;}
-  return "h"+(h>>>0).toString(36)+"_"+str.length;
+  return "hl:"+((h>>>0).toString(36)+"_"+str.length);
 }
 function loadHL(){
   try{
@@ -756,9 +1067,10 @@ document.addEventListener("selectionchange",()=>{
 /* ===================== /형광펜 기능 ===================== */
 
 /* ===================== 내용 수정 + GitHub 저장 ===================== */
-const ED_CACHE_KEY="patentStudyEdits";
-const ED_PENDING_KEY="patentStudyEditsPending";
-const GH_KEY="patentStudyGh";
+const ED_CACHE_KEY=APP_ID+"StudyEdits";
+const ED_PENDING_KEY=APP_ID+"StudyEditsPending";
+const GH_KEY=APP_ID+"StudyGh";
+const META_KEY="__meta__"+APP_ID;
 let EDITS={};      // { 슬라이드키: {text, ref, at} }  ← 모든 기기에 공통 적용되는 수정본
 let PENDING={};    // GitHub에 아직 못 올린 수정 (entry 또는 null=원문 복구)
 let GH={owner:"",repo:"",branch:"",path:"",token:""};
@@ -823,7 +1135,7 @@ function ghConf(){
   const d=ghDefaults();
   return {
     owner:GH.owner||d.owner, repo:GH.repo||d.repo,
-    branch:GH.branch||"main", path:GH.path||"edits.json", token:GH.token||""
+    branch:GH.branch||"main", path:GH.path||APP_ID+"-edits.json", token:GH.token||""
   };
 }
 function ghUrl(c){
@@ -1134,6 +1446,7 @@ function rebuildCases(remap){
   merged.forEach(c=>CASES.push(c));
   initKeys();
   applyEdits();
+  applyCaseOrder();
   if(remap){
     recomputeFilter();
     const p=pool();
@@ -1176,7 +1489,7 @@ async function saveAdd(){
   if(!a) return err("판결요지를 입력해 주세요.");
   const id="+n"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   const entry={
-    kind:"case",section:section,title:title,question:title,
+    kind:"case",app:APP_ID,section:section,title:title,question:title,
     slides:[{label:"판시사항",text:(info?info+"\n\n":"")+q},{label:"판결요지",text:a}],
     at:new Date().toISOString()
   };
@@ -1228,9 +1541,27 @@ $("modeBtn").onclick=()=>{
   render();
 };
 $("revealBtn").onclick=()=>{revealed=!revealed;render();};
-$("sectionBtn").onclick=()=>{$("drawerBg").classList.add("open");buildFilters();};
-$("close").onclick=()=>$("drawerBg").classList.remove("open");
-$("allFilter").onclick=()=>{filtered=null;filterSection=null;caseIndex=0;slideIndex=0;revealed=false;$("drawerBg").classList.remove("open");render();};
+$("sectionBtn").onclick=()=>{
+  $("drawerBg").classList.add("open");
+  buildFilters();
+  $("caseSearch").focus();
+};
+$("caseSearch").oninput=e=>buildSearchResults(e.target.value);
+$("caseSearchClear").onclick=()=>{
+  $("caseSearch").value="";
+  buildSearchResults("");
+  $("caseSearch").focus();
+};
+$("close").onclick=()=>{
+  $("drawerBg").classList.remove("open");
+  $("caseSearch").value="";
+  buildSearchResults("");
+};
+$("allFilter").onclick=()=>{
+  filtered=null;filterSection=null;caseIndex=0;slideIndex=0;revealed=false;
+  $("caseSearch").value="";buildSearchResults("");
+  $("drawerBg").classList.remove("open");render();
+};
 $("drawerBg").onclick=e=>{if(e.target===$("drawerBg"))$("drawerBg").classList.remove("open");};
 
 document.addEventListener("keydown",e=>{
